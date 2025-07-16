@@ -4,23 +4,38 @@ import json
 import os
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
 from io import BytesIO
 from collections import defaultdict
-from flask_moment import Moment
-from matplotlib.backends.backend_pdf import PdfPages
 from flask_migrate import Migrate
 from sqlalchemy import func
+
+# Optionale Importe für Diagramme und Excel
+try:
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import pandas as pd
+    from matplotlib.backends.backend_pdf import PdfPages
+    HAS_CHARTS = True
+except ImportError:
+    HAS_CHARTS = False
+    print("⚠️  Matplotlib/Pandas nicht verfügbar - Diagramme deaktiviert")
+
+# Optionale Importe für Flask-Moment
+try:
+    from flask_moment import Moment
+    HAS_MOMENT = True
+except ImportError:
+    HAS_MOMENT = False
+    print("⚠️  Flask-Moment nicht verfügbar - Zeitfunktionen deaktiviert")
 
 #from weasyprint import HTML, CSS
 # App erstellen
 app = Flask(__name__)
 app.secret_key = 'dein_geheimer_schlüssel_12345'
 
-# Flask-Moment initialisieren
-moment = Moment(app)
+# Flask-Moment initialisieren (falls verfügbar)
+if HAS_MOMENT:
+    moment = Moment(app)
 
 # Datenbank konfigurieren (nur SQLite)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///local.db'
@@ -157,7 +172,19 @@ class Transaction(db.Model):
         return f"<Transaction {self.description}>"
 
 # MODELS
+
+class User(db.Model):
+    __tablename__ = 'user'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(64), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(256), nullable=False)
+    is_admin = db.Column(db.Boolean, default=False)
+    is_teacher = db.Column(db.Boolean, default=False)
+    created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
 class Klasse(db.Model):
+    __tablename__ = 'klasse'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False)
     schuljahr = db.Column(db.String(9), nullable=False)
@@ -170,23 +197,139 @@ class Schueler(db.Model):
     nachname = db.Column(db.String(50), nullable=False)
     geburtsdatum = db.Column(db.Date)
     geschlecht = db.Column(db.String(1))
+    notfallkontakt = db.Column(db.String(100))
+    familie_id = db.Column(db.Integer, db.ForeignKey('familie.id'), nullable=True)
     klasse_id = db.Column(db.Integer, db.ForeignKey('klasse.id'), nullable=False)
+    
+    # Relationships
+    anwesenheiten = db.relationship('Anwesenheit', backref='schueler', lazy=True)
+    noten = db.relationship('Note', backref='schueler', lazy=True)
+    wettbewerb_teilnahmen = db.relationship('WettbewerbTeilnahme', backref='schueler', lazy=True)
 
 class Unterrichtseinheit(db.Model):
+    __tablename__ = 'unterrichtseinheit'
     id = db.Column(db.Integer, primary_key=True)
     datum = db.Column(db.Date, nullable=False)
     stunden = db.Column(db.String(10), nullable=False)
     thema = db.Column(db.String(100), nullable=False)
     inhalte = db.Column(db.Text)
     bemerkung = db.Column(db.Text)
+    hausaufgaben = db.Column(db.Text)
     klasse_id = db.Column(db.Integer, db.ForeignKey('klasse.id'), nullable=False)
+    lehrer_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    
+    # Relationships
+    lehrer = db.relationship('User', backref='unterrichtseinheiten')
+    materialien = db.relationship('UnterrichtsMaterial', backref='unterrichtseinheit', lazy=True)
 
 class Anwesenheit(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     schueler_id = db.Column(db.Integer, db.ForeignKey('schueler.id'), nullable=False)
     unterrichtseinheit_id = db.Column(db.Integer, db.ForeignKey('unterrichtseinheit.id'), nullable=False)
-    anwesend = db.Column(db.Boolean, default=False)
-    entschuldigt = db.Column(db.Boolean, default=False)
+    status = db.Column(db.String(20), default='anwesend')  # anwesend, abwesend, verspätet, entschuldigt
+    verspätung_minuten = db.Column(db.Integer, default=0)
+    bemerkung = db.Column(db.Text)
+    eingetragen_am = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+
+# ERWEITERTE MODELLE FÜR KLASSENBUCH-SYSTEM
+
+# Familienverwaltung
+class Familie(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    familienname = db.Column(db.String(50), nullable=False)
+    kontaktperson = db.Column(db.String(100))
+    telefon = db.Column(db.String(20))
+    email = db.Column(db.String(100))
+    adresse = db.Column(db.Text)
+    kinder = db.relationship('Schueler', backref='familie', lazy=True)
+    spenden = db.relationship('Spende', backref='familie', lazy=True)
+
+# Notenerfassung mit Checklisten
+class Bewertungskategorie(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(50), nullable=False)  # z.B. "Koranlesen", "Religiöses Wissen", "Verhalten"
+    beschreibung = db.Column(db.Text)
+    max_punkte = db.Column(db.Integer, default=5)
+    kriterien = db.relationship('Bewertungskriterium', backref='kategorie', lazy=True)
+
+class Bewertungskriterium(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    kategorie_id = db.Column(db.Integer, db.ForeignKey('bewertungskategorie.id'), nullable=False)
+    kriterium = db.Column(db.String(100), nullable=False)  # z.B. "Tajwid beachtet", "Aussprache korrekt"
+    gewichtung = db.Column(db.Float, default=1.0)
+
+class Note(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    schueler_id = db.Column(db.Integer, db.ForeignKey('schueler.id'), nullable=False)
+    kategorie_id = db.Column(db.Integer, db.ForeignKey('bewertungskategorie.id'), nullable=False)
+    unterrichtseinheit_id = db.Column(db.Integer, db.ForeignKey('unterrichtseinheit.id'), nullable=True)
+    bewertung = db.Column(db.Integer, nullable=False)  # 1-5 Sterne
+    bemerkung = db.Column(db.Text)
+    datum = db.Column(db.Date, default=datetime.date.today)
+    
+    # Relationships
+    kategorie = db.relationship('Bewertungskategorie', backref='noten')
+    checkliste_items = db.relationship('ChecklisteItem', backref='note', lazy=True)
+
+class ChecklisteItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    note_id = db.Column(db.Integer, db.ForeignKey('note.id'), nullable=False)
+    kriterium_id = db.Column(db.Integer, db.ForeignKey('bewertungskriterium.id'), nullable=False)
+    erfuellt = db.Column(db.Boolean, default=False)
+    
+    # Relationships
+    kriterium = db.relationship('Bewertungskriterium', backref='checkliste_items')
+
+# Spendenverwaltung
+class Spende(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    familie_id = db.Column(db.Integer, db.ForeignKey('familie.id'), nullable=False)
+    betrag = db.Column(db.Float, nullable=False)
+    zweck = db.Column(db.String(100))  # z.B. "Klassenmaterialien", "Bücher", "Ausflug"
+    datum = db.Column(db.Date, default=datetime.date.today)
+    status = db.Column(db.String(20), default='erhalten')  # erhalten, ausstehend, storniert
+
+# Wettbewerbe
+class Wettbewerb(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(100), nullable=False)
+    typ = db.Column(db.String(50), nullable=False)  # "Koran", "Wissen", "Verhalten"
+    beschreibung = db.Column(db.Text)
+    datum = db.Column(db.Date, nullable=False)
+    anmeldeschluss = db.Column(db.Date)
+    ist_aktiv = db.Column(db.Boolean, default=True)
+    teilnahmen = db.relationship('WettbewerbTeilnahme', backref='wettbewerb', lazy=True)
+
+class WettbewerbTeilnahme(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    wettbewerb_id = db.Column(db.Integer, db.ForeignKey('wettbewerb.id'), nullable=False)
+    schueler_id = db.Column(db.Integer, db.ForeignKey('schueler.id'), nullable=False)
+    anmeldedatum = db.Column(db.Date, default=datetime.date.today)
+    platzierung = db.Column(db.Integer, nullable=True)
+    punkte = db.Column(db.Integer, nullable=True)
+    bemerkung = db.Column(db.Text)
+
+# Rollenmanagement (Erweiterung des bestehenden User-Modells)
+class LehrerKlassenZuordnung(db.Model):
+    __tablename__ = 'lehrer_klassen_zuordnung'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    klasse_id = db.Column(db.Integer, db.ForeignKey('klasse.id'), nullable=False)
+    
+    # Relationships
+    user = db.relationship('User', backref='klassen_zuordnungen')
+    klasse = db.relationship('Klasse', backref='lehrer_zuordnungen')
+
+# Materialien-Upload
+class UnterrichtsMaterial(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    unterrichtseinheit_id = db.Column(db.Integer, db.ForeignKey('unterrichtseinheit.id'), nullable=False)
+    titel = db.Column(db.String(100), nullable=False)
+    dateiname = db.Column(db.String(255), nullable=False)
+    dateipfad = db.Column(db.String(500), nullable=False)
+    dateityp = db.Column(db.String(20))  # PDF, Bild, Audio
+    upload_datum = db.Column(db.DateTime, default=datetime.datetime.utcnow)
+    ist_oeffentlich = db.Column(db.Boolean, default=True)
 
 # Admin Dashboard
 # Daten-Updates verwalten
@@ -208,8 +351,33 @@ def load_updates():
         save_updates()
 
 # Datenbank initialisieren
-with app.app_context():
-    db.create_all()
+def init_database():
+    """Datenbank initialisieren mit Fehlerbehandlung"""
+    try:
+        with app.app_context():
+            db.create_all()
+            print("✅ Datenbank erfolgreich initialisiert!")
+            
+            # Test-Daten erstellen falls keine vorhanden
+            if User.query.count() == 0:
+                admin_user = User(
+                    username='admin',
+                    email='admin@moschee.de',
+                    password_hash='admin123',
+                    is_admin=True
+                )
+                db.session.add(admin_user)
+                db.session.commit()
+                print("✅ Test-Admin erstellt (admin/admin123)")
+            
+            return True
+    except Exception as e:
+        print(f"❌ Fehler beim Initialisieren der Datenbank: {e}")
+        return False
+
+# Datenbank initialisieren
+if not init_database():
+    print("⚠️  Datenbank konnte nicht initialisiert werden. Bitte prüfen Sie die Modelle.")
 
 load_updates()
 
@@ -259,6 +427,21 @@ def index():
                            total_posts=total_posts,
                            posts_per_slide=posts_per_slide)
 
+@app.route('/db_test')
+def db_test():
+    """Test-Route um die Datenbank zu prüfen"""
+    try:
+        user_count = User.query.count()
+        klasse_count = Klasse.query.count()
+        return f"""
+        <h1>🎉 Datenbank-Test erfolgreich!</h1>
+        <p>Benutzer in der Datenbank: {user_count}</p>
+        <p>Klassen in der Datenbank: {klasse_count}</p>
+        <p><a href="/klassenbuch">Zum Klassenbuch</a></p>
+        <p><a href="/">Zurück zur Startseite</a></p>
+        """
+    except Exception as e:
+        return f"<h1>❌ Datenbank-Fehler:</h1><p>{str(e)}</p>"
 
 @app.route('/blog')
 def blog():
@@ -1658,6 +1841,11 @@ def admin_finanzen_export_all():
 
 
 
+@app.route("/klassenbuch_redirect")
+def klassenbuch_redirect():
+    """Weiterleitung zum Klassenbuch"""
+    return redirect(url_for('klassenbuch'))
+
 @app.route("/klassenbuch")
 def klassenbuch():
     klassen = Klasse.query.all()
@@ -1754,27 +1942,58 @@ def klassenbuch_details(klasse_id):
             "entschuldigt"
         ] = anwesenheit.entschuldigt
 
+    # Anwesenheitsstatistiken für die Klasse
+    anwesenheit_stats = {'anwesend': 0, 'verspaetet': 0, 'entschuldigt': 0, 'abwesend': 0}
+    total_anwesenheiten = Anwesenheit.query.join(Unterrichtseinheit).filter(
+        Unterrichtseinheit.klasse_id == klasse_id
+    ).all()
+    
+    for anwesenheit in total_anwesenheiten:
+        if anwesenheit.status == 'anwesend':
+            anwesenheit_stats['anwesend'] += 1
+        elif anwesenheit.status == 'verspätet':
+            anwesenheit_stats['verspaetet'] += 1
+        elif anwesenheit.status == 'entschuldigt':
+            anwesenheit_stats['entschuldigt'] += 1
+        else:
+            anwesenheit_stats['abwesend'] += 1
+
+    # Anwesenheitsrate berechnen
+    total_entries = sum(anwesenheit_stats.values())
+    anwesenheits_rate = (anwesenheit_stats['anwesend'] / total_entries * 100) if total_entries > 0 else 0
+
+    # Durchschnittsnote berechnen
+    noten = Note.query.join(Schueler).filter(Schueler.klasse_id == klasse_id).all()
+    durchschnittsnote = sum(note.bewertung for note in noten) / len(noten) if noten else 0
+
     return render_template(
         "klassenbuch_details.html",
         klasse=klasse,
         schueler=schueler,
         unterrichtseinheiten=unterrichtseinheiten,
         anwesenheits_data=anwesenheits_data,
+        anwesenheit_stats=anwesenheit_stats,
+        anwesenheits_rate=anwesenheits_rate,
+        durchschnittsnote=durchschnittsnote,
     )
 
 
 @app.route("/schueler_erstellen/<int:klasse_id>", methods=["GET", "POST"])
 def schueler_erstellen(klasse_id):
     klasse = Klasse.query.get_or_404(klasse_id)
+    familien = Familie.query.all()
+    
     if request.method == "POST":
         name = request.form.get("name")
         nachname = request.form.get("nachname")
         geburtsdatum_str = request.form.get("geburtsdatum")
         geschlecht = request.form.get("geschlecht")
+        notfallkontakt = request.form.get("notfallkontakt")
+        familie_id = request.form.get("familie_id")
 
         if not all([name, nachname]):
             flash("Vorname und Nachname sind erforderlich.", "danger")
-            return render_template("schueler_erstellen.html", klasse=klasse)
+            return render_template("schueler_erstellen.html", klasse=klasse, familien=familien)
 
         geburtsdatum = None
         if geburtsdatum_str:
@@ -1782,20 +2001,22 @@ def schueler_erstellen(klasse_id):
                 geburtsdatum = datetime.datetime.strptime(geburtsdatum_str, "%Y-%m-%d").date()
             except ValueError:
                 flash("Ungültiges Datumsformat für Geburtsdatum.", "danger")
-                return render_template("schueler_erstellen.html", klasse=klasse)
+                return render_template("schueler_erstellen.html", klasse=klasse, familien=familien)
 
         neuer_schueler = Schueler(
             name=name,
             nachname=nachname,
             geburtsdatum=geburtsdatum,
             geschlecht=geschlecht,
+            notfallkontakt=notfallkontakt,
             klasse_id=klasse.id,
+            familie_id=int(familie_id) if familie_id else None
         )
         db.session.add(neuer_schueler)
         db.session.commit()
         flash("Schüler erfolgreich hinzugefügt!", "success")
         return redirect(url_for("klassenbuch_details", klasse_id=klasse.id))
-    return render_template("schueler_erstellen.html", klasse=klasse)
+    return render_template("schueler_erstellen.html", klasse=klasse, familien=familien)
 
 
 @app.route("/schueler_bearbeiten/<int:schueler_id>", methods=["GET", "POST"])
@@ -1984,7 +2205,7 @@ def unterricht_erstellen():
                 "unterricht_erstellen.html", klassen=klassen, current_date=current_date
             )
 
-    return render_template("unterricht_erstellen.html", klassen=klassen, current_date=current_date)
+    return render_template("unterricht_erstellen.html", klassen=klassen, heute=current_date)
 
 
 
@@ -2234,11 +2455,475 @@ def statistik2(klasse_id):
     )
 
 
-# Datenbank initialisieren
-@app.before_first_request
-def create_tables():
-    db.create_all()
+# =============================================================================
+# ERWEITERTE KLASSENBUCH-FUNKTIONEN
+# =============================================================================
+
+# Familienverwaltung
+@app.route('/familien')
+def familien_liste():
+    """Übersicht aller Familien"""
+    familien = Familie.query.all()
+    return render_template('familien_liste.html', familien=familien)
+
+@app.route('/familie_erstellen', methods=['GET', 'POST'])
+def familie_erstellen():
+    """Neue Familie erstellen"""
+    if request.method == 'POST':
+        familienname = request.form.get('familienname')
+        kontaktperson = request.form.get('kontaktperson')
+        telefon = request.form.get('telefon')
+        email = request.form.get('email')
+        adresse = request.form.get('adresse')
+        
+        if not familienname:
+            flash('Familienname ist erforderlich', 'danger')
+            return render_template('familie_erstellen.html')
+        
+        neue_familie = Familie(
+            familienname=familienname,
+            kontaktperson=kontaktperson,
+            telefon=telefon,
+            email=email,
+            adresse=adresse
+        )
+        db.session.add(neue_familie)
+        db.session.commit()
+        flash('Familie erfolgreich erstellt', 'success')
+        return redirect(url_for('familien_liste'))
+    
+    return render_template('familie_erstellen.html')
+
+@app.route('/familie_bearbeiten/<int:familie_id>', methods=['GET', 'POST'])
+def familie_bearbeiten(familie_id):
+    """Familie bearbeiten"""
+    familie = Familie.query.get_or_404(familie_id)
+    
+    if request.method == 'POST':
+        familie.familienname = request.form.get('familienname')
+        familie.kontaktperson = request.form.get('kontaktperson')
+        familie.telefon = request.form.get('telefon')
+        familie.email = request.form.get('email')
+        familie.adresse = request.form.get('adresse')
+        
+        db.session.commit()
+        flash('Familie erfolgreich aktualisiert', 'success')
+        return redirect(url_for('familien_liste'))
+    
+    return render_template('familie_bearbeiten.html', familie=familie)
+
+# Notenerfassung
+@app.route('/noten_kategorien')
+def noten_kategorien():
+    """Bewertungskategorien verwalten"""
+    kategorien = Bewertungskategorie.query.all()
+    return render_template('noten_kategorien.html', kategorien=kategorien)
+
+@app.route('/kategorie_erstellen', methods=['GET', 'POST'])
+def kategorie_erstellen():
+    """Neue Bewertungskategorie erstellen"""
+    if request.method == 'POST':
+        name = request.form.get('name')
+        beschreibung = request.form.get('beschreibung')
+        max_punkte = int(request.form.get('max_punkte', 5))
+        
+        if not name:
+            flash('Kategoriename ist erforderlich', 'danger')
+            return render_template('kategorie_erstellen.html')
+        
+        neue_kategorie = Bewertungskategorie(
+            name=name,
+            beschreibung=beschreibung,
+            max_punkte=max_punkte
+        )
+        db.session.add(neue_kategorie)
+        db.session.commit()
+        flash('Kategorie erfolgreich erstellt', 'success')
+        return redirect(url_for('noten_kategorien'))
+    
+    return render_template('kategorie_erstellen.html')
+
+@app.route('/noten_erfassen/<int:klasse_id>')
+def noten_erfassen(klasse_id):
+    """Noten für eine Klasse erfassen"""
+    klasse = Klasse.query.get_or_404(klasse_id)
+    schueler = Schueler.query.filter_by(klasse_id=klasse_id).all()
+    kategorien = Bewertungskategorie.query.all()
+    
+    return render_template('noten_erfassen.html', 
+                         klasse=klasse, 
+                         schueler=schueler, 
+                         kategorien=kategorien)
+
+@app.route('/note_speichern', methods=['POST'])
+def note_speichern():
+    """Einzelne Note speichern"""
+    schueler_id = request.form.get('schueler_id')
+    kategorie_id = request.form.get('kategorie_id')
+    bewertung = request.form.get('bewertung')
+    bemerkung = request.form.get('bemerkung')
+    unterrichtseinheit_id = request.form.get('unterrichtseinheit_id')
+    
+    neue_note = Note(
+        schueler_id=schueler_id,
+        kategorie_id=kategorie_id,
+        bewertung=bewertung,
+        bemerkung=bemerkung,
+        unterrichtseinheit_id=unterrichtseinheit_id
+    )
+    db.session.add(neue_note)
+    db.session.commit()
+    
+    # Checkliste-Items speichern
+    kriterien = request.form.getlist('kriterien')
+    for kriterium_id in kriterien:
+        erfuellt = request.form.get(f'kriterium_{kriterium_id}') == 'on'
+        checkliste_item = ChecklisteItem(
+            note_id=neue_note.id,
+            kriterium_id=kriterium_id,
+            erfuellt=erfuellt
+        )
+        db.session.add(checkliste_item)
+    
+    db.session.commit()
+    flash('Note erfolgreich gespeichert', 'success')
+    return redirect(url_for('noten_erfassen', klasse_id=request.form.get('klasse_id')))
+
+# Spendenverwaltung
+@app.route('/spenden')
+def spenden_liste():
+    """Spenden-Übersicht"""
+    spenden = Spende.query.order_by(Spende.datum.desc()).all()
+    return render_template('spenden_liste.html', spenden=spenden)
+
+@app.route('/spende_erfassen', methods=['GET', 'POST'])
+def spende_erfassen():
+    """Neue Spende erfassen"""
+    if request.method == 'POST':
+        familie_id = request.form.get('familie_id')
+        betrag = float(request.form.get('betrag'))
+        zweck = request.form.get('zweck')
+        datum = datetime.datetime.strptime(request.form.get('datum'), '%Y-%m-%d').date()
+        
+        neue_spende = Spende(
+            familie_id=familie_id,
+            betrag=betrag,
+            zweck=zweck,
+            datum=datum
+        )
+        db.session.add(neue_spende)
+        db.session.commit()
+        flash('Spende erfolgreich erfasst', 'success')
+        return redirect(url_for('spenden_liste'))
+    
+    familien = Familie.query.all()
+    return render_template('spende_erfassen.html', familien=familien)
+
+# Wettbewerbe
+@app.route('/wettbewerbe')
+def wettbewerbe_liste():
+    """Wettbewerbe-Übersicht"""
+    wettbewerbe = Wettbewerb.query.order_by(Wettbewerb.datum.desc()).all()
+    return render_template('wettbewerbe_liste.html', wettbewerbe=wettbewerbe)
+
+@app.route('/wettbewerb_erstellen', methods=['GET', 'POST'])
+def wettbewerb_erstellen():
+    """Neuen Wettbewerb erstellen"""
+    if request.method == 'POST':
+        name = request.form.get('name')
+        typ = request.form.get('typ')
+        beschreibung = request.form.get('beschreibung')
+        datum = datetime.datetime.strptime(request.form.get('datum'), '%Y-%m-%d').date()
+        anmeldeschluss = datetime.datetime.strptime(request.form.get('anmeldeschluss'), '%Y-%m-%d').date()
+        
+        neuer_wettbewerb = Wettbewerb(
+            name=name,
+            typ=typ,
+            beschreibung=beschreibung,
+            datum=datum,
+            anmeldeschluss=anmeldeschluss
+        )
+        db.session.add(neuer_wettbewerb)
+        db.session.commit()
+        flash('Wettbewerb erfolgreich erstellt', 'success')
+        return redirect(url_for('wettbewerbe_liste'))
+    
+    return render_template('wettbewerb_erstellen.html')
+
+@app.route('/wettbewerb_anmeldung/<int:wettbewerb_id>')
+def wettbewerb_anmeldung(wettbewerb_id):
+    """Schüler für Wettbewerb anmelden"""
+    wettbewerb = Wettbewerb.query.get_or_404(wettbewerb_id)
+    schueler = Schueler.query.all()
+    angemeldete_schueler = WettbewerbTeilnahme.query.filter_by(wettbewerb_id=wettbewerb_id).all()
+    
+    return render_template('wettbewerb_anmeldung.html', 
+                         wettbewerb=wettbewerb, 
+                         schueler=schueler,
+                         angemeldete_schueler=angemeldete_schueler)
+
+@app.route('/wettbewerb_teilnahme_speichern', methods=['POST'])
+def wettbewerb_teilnahme_speichern():
+    """Wettbewerb-Teilnahme speichern"""
+    wettbewerb_id = request.form.get('wettbewerb_id')
+    schueler_ids = request.form.getlist('schueler_ids')
+    
+    # Bestehende Teilnahmen löschen
+    WettbewerbTeilnahme.query.filter_by(wettbewerb_id=wettbewerb_id).delete()
+    
+    # Neue Teilnahmen hinzufügen
+    for schueler_id in schueler_ids:
+        teilnahme = WettbewerbTeilnahme(
+            wettbewerb_id=wettbewerb_id,
+            schueler_id=schueler_id
+        )
+        db.session.add(teilnahme)
+    
+    db.session.commit()
+    flash('Anmeldungen gespeichert', 'success')
+    return redirect(url_for('wettbewerb_anmeldung', wettbewerb_id=wettbewerb_id))
+
+# Erweiterte Anwesenheitskontrolle
+@app.route('/anwesenheit_erweitert/<int:unterrichtseinheit_id>')
+def anwesenheit_erweitert(unterrichtseinheit_id):
+    """Erweiterte Anwesenheitskontrolle"""
+    unterrichtseinheit = Unterrichtseinheit.query.get_or_404(unterrichtseinheit_id)
+    schueler = Schueler.query.filter_by(klasse_id=unterrichtseinheit.klasse_id).all()
+    
+    # Bestehende Anwesenheitsdaten laden
+    anwesenheiten = {}
+    for anwesenheit in Anwesenheit.query.filter_by(unterrichtseinheit_id=unterrichtseinheit_id).all():
+        anwesenheiten[anwesenheit.schueler_id] = anwesenheit
+    
+    return render_template('anwesenheit_erweitert.html', 
+                         unterrichtseinheit=unterrichtseinheit,
+                         schueler=schueler,
+                         anwesenheiten=anwesenheiten)
+
+@app.route('/anwesenheit_speichern_erweitert', methods=['POST'])
+def anwesenheit_speichern_erweitert():
+    """Erweiterte Anwesenheit speichern"""
+    unterrichtseinheit_id = request.form.get('unterrichtseinheit_id')
+    
+    # Bestehende Anwesenheitsdaten löschen
+    Anwesenheit.query.filter_by(unterrichtseinheit_id=unterrichtseinheit_id).delete()
+    
+    # Neue Anwesenheitsdaten speichern
+    for key, value in request.form.items():
+        if key.startswith('status_'):
+            schueler_id = key.replace('status_', '')
+            status = value
+            verspätung = request.form.get(f'verspätung_{schueler_id}', 0)
+            bemerkung = request.form.get(f'bemerkung_{schueler_id}', '')
+            
+            anwesenheit = Anwesenheit(
+                schueler_id=schueler_id,
+                unterrichtseinheit_id=unterrichtseinheit_id,
+                status=status,
+                verspätung_minuten=int(verspätung) if verspätung else 0,
+                bemerkung=bemerkung
+            )
+            db.session.add(anwesenheit)
+    
+    db.session.commit()
+    flash('Anwesenheit gespeichert', 'success')
+    return redirect(url_for('klassenbuch_details', klasse_id=request.form.get('klasse_id')))
+
+# Erweiterte Dashboard-Funktionen
+@app.route('/dashboard_erweitert')
+def dashboard_erweitert():
+    """Erweitertes Dashboard für Klassenbuch"""
+    heute = datetime.date.today()
+    
+    # Heutige Unterrichtseinheiten
+    heutige_unterrichtseinheiten = Unterrichtseinheit.query.filter_by(datum=heute).all()
+    
+    # Letzte Unterrichtsthemen
+    letzte_themen = Unterrichtseinheit.query.order_by(Unterrichtseinheit.datum.desc()).limit(5).all()
+    
+    # Anwesenheitsstatistiken
+    anwesenheits_stats = {}
+    for klasse in Klasse.query.all():
+        total_schueler = len(klasse.schueler)
+        if total_schueler > 0:
+            anwesenheiten_heute = db.session.query(Anwesenheit).join(Unterrichtseinheit).filter(
+                Unterrichtseinheit.klasse_id == klasse.id,
+                Unterrichtseinheit.datum == heute,
+                Anwesenheit.status == 'anwesend'
+            ).count()
+            anwesenheits_stats[klasse.name] = {
+                'anwesend': anwesenheiten_heute,
+                'total': total_schueler,
+                'prozent': round((anwesenheiten_heute / total_schueler) * 100, 1)
+            }
+    
+    # Kommende Wettbewerbe
+    kommende_wettbewerbe = Wettbewerb.query.filter(
+        Wettbewerb.datum >= heute,
+        Wettbewerb.ist_aktiv == True
+    ).order_by(Wettbewerb.datum.asc()).limit(3).all()
+    
+    # Spenden-Statistiken
+    spenden_monat = Spende.query.filter(
+        Spende.datum >= datetime.date(heute.year, heute.month, 1),
+        Spende.status == 'erhalten'
+    ).all()
+    spenden_summe = sum(s.betrag for s in spenden_monat)
+    
+    return render_template('dashboard_erweitert.html',
+                         heutige_unterrichtseinheiten=heutige_unterrichtseinheiten,
+                         letzte_themen=letzte_themen,
+                         anwesenheits_stats=anwesenheits_stats,
+                         kommende_wettbewerbe=kommende_wettbewerbe,
+                         spenden_summe=spenden_summe,
+                         heute=heute)
+
+# Excel Import/Export
+@app.route('/schueler_import', methods=['GET', 'POST'])
+def schueler_import():
+    """Schüler aus Excel importieren"""
+    if request.method == 'POST':
+        if 'file' not in request.files:
+            flash('Keine Datei ausgewählt', 'danger')
+            return redirect(request.url)
+        
+        file = request.files['file']
+        if file.filename == '':
+            flash('Keine Datei ausgewählt', 'danger')
+            return redirect(request.url)
+        
+        if file and file.filename.endswith('.xlsx'):
+            if not HAS_CHARTS:
+                flash('Excel-Import nicht verfügbar. Pandas ist nicht installiert.', 'danger')
+                return redirect(request.url)
+            try:
+                df = pd.read_excel(file)
+                klasse_id = request.form.get('klasse_id')
+                
+                erfolg = 0
+                for index, row in df.iterrows():
+                    if pd.notna(row['Name']) and pd.notna(row['Nachname']):
+                        schueler = Schueler(
+                            name=row['Name'],
+                            nachname=row['Nachname'],
+                            geburtsdatum=pd.to_datetime(row['Geburtsdatum']).date() if pd.notna(row['Geburtsdatum']) else None,
+                            geschlecht=row['Geschlecht'] if pd.notna(row['Geschlecht']) else None,
+                            notfallkontakt=row['Notfallkontakt'] if pd.notna(row['Notfallkontakt']) else None,
+                            klasse_id=klasse_id
+                        )
+                        db.session.add(schueler)
+                        erfolg += 1
+                
+                db.session.commit()
+                flash(f'{erfolg} Schüler erfolgreich importiert', 'success')
+                return redirect(url_for('klassenbuch_details', klasse_id=klasse_id))
+            
+            except Exception as e:
+                flash(f'Fehler beim Import: {str(e)}', 'danger')
+        else:
+            flash('Nur Excel-Dateien (.xlsx) sind erlaubt', 'danger')
+    
+    klassen = Klasse.query.all()
+    return render_template('schueler_import.html', klassen=klassen)
+
+@app.route('/schueler_export/<int:klasse_id>')
+def schueler_export(klasse_id):
+    """Schüler als Excel exportieren"""
+    if not HAS_CHARTS:
+        flash('Excel-Export nicht verfügbar. Pandas ist nicht installiert.', 'danger')
+        return redirect(url_for('klassenbuch_details', klasse_id=klasse_id))
+    
+    klasse = Klasse.query.get_or_404(klasse_id)
+    schueler = Schueler.query.filter_by(klasse_id=klasse_id).all()
+    
+    # Daten vorbereiten
+    data = []
+    for s in schueler:
+        data.append({
+            'Name': s.name,
+            'Nachname': s.nachname,
+            'Geburtsdatum': s.geburtsdatum,
+            'Geschlecht': s.geschlecht,
+            'Notfallkontakt': s.notfallkontakt,
+            'Familie': s.familie.familienname if s.familie else ''
+        })
+    
+    df = pd.DataFrame(data)
+    
+    # Excel-Datei erstellen
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Schüler')
+    
+    output.seek(0)
+    
+    return send_file(output, 
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                     as_attachment=True,
+                     download_name=f'schueler_{klasse.name}_{klasse.schuljahr}.xlsx')
+
+# Datenbank-Tabellen werden bereits in init_database() erstellt
+# @app.before_first_request ist in neueren Flask-Versionen nicht mehr verfügbar
+
+# Erstelle Standard-Bewertungskategorien
+@app.route('/setup_default_categories')
+def setup_default_categories():
+    """Standard-Bewertungskategorien erstellen"""
+    kategorien = [
+        {
+            'name': 'Koranlesen',
+            'beschreibung': 'Bewertung des Koranlesens',
+            'kriterien': [
+                'Tajwid beachtet',
+                'Aussprache korrekt',
+                'Flüssigkeit',
+                'Betonung richtig'
+            ]
+        },
+        {
+            'name': 'Religiöses Wissen',
+            'beschreibung': 'Bewertung des religiösen Wissens',
+            'kriterien': [
+                'Grundlagen verstanden',
+                'Anwendung richtig',
+                'Zusatzwissen gezeigt',
+                'Fragen beantwortet'
+            ]
+        },
+        {
+            'name': 'Verhalten',
+            'beschreibung': 'Bewertung des Verhaltens',
+            'kriterien': [
+                'Respektvoll',
+                'Aufmerksam',
+                'Hilfsbereit',
+                'Pünktlich'
+            ]
+        }
+    ]
+    
+    for kat_data in kategorien:
+        # Prüfen ob Kategorie bereits existiert
+        if not Bewertungskategorie.query.filter_by(name=kat_data['name']).first():
+            kategorie = Bewertungskategorie(
+                name=kat_data['name'],
+                beschreibung=kat_data['beschreibung']
+            )
+            db.session.add(kategorie)
+            db.session.commit()
+            
+            # Kriterien hinzufügen
+            for kriterium_text in kat_data['kriterien']:
+                kriterium = Bewertungskriterium(
+                    kategorie_id=kategorie.id,
+                    kriterium=kriterium_text
+                )
+                db.session.add(kriterium)
+    
+    db.session.commit()
+    flash('Standard-Kategorien erstellt', 'success')
+    return redirect(url_for('noten_kategorien'))
+
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
+    print("🚀 Starte Moschee-Klassenbuch-System...")
     app.run(debug=True, host='0.0.0.0', port=3000)

@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Klasse bearbeiten{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-edit"></i> Klasse bearbeiten</h1>
+    <p class="text-muted">Bearbeiten Sie die Informationen für {{ klasse.name }}</p>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-graduation-cap"></i> Klassen-Informationen</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">
+                            <i class="fas fa-tag"></i> Klassenname *
+                        </label>
+                        <input type="text" class="form-control" id="name" name="name" 
+                               value="{{ klasse.name }}" required>
+                        <div class="form-text">
+                            Geben Sie einen aussagekräftigen Namen für die Klasse ein.
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="schuljahr" class="form-label">
+                            <i class="fas fa-calendar-alt"></i> Schuljahr *
+                        </label>
+                        <input type="text" class="form-control" id="schuljahr" name="schuljahr" 
+                               value="{{ klasse.schuljahr }}" required>
+                        <div class="form-text">
+                            Das Schuljahr im Format YYYY/YYYY (z.B. 2024/2025).
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-save"></i> Änderungen speichern
+                            </button>
+                        </div>
+                        <div class="col-md-4">
+                            <a href="{{ url_for('klassenbuch_details', klasse_id=klasse.id) }}" class="btn btn-secondary w-100">
+                                <i class="fas fa-times"></i> Abbrechen
+                            </a>
+                        </div>
+                        <div class="col-md-4">
+                            <button type="button" class="btn btn-danger w-100" onclick="deleteKlasse({{ klasse.id }})">
+                                <i class="fas fa-trash"></i> Klasse löschen
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row justify-content-center mt-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-info-circle"></i> Klassenstatistiken</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-4">
+                        <div class="stat-item">
+                            <h4>{{ klasse.schueler|length }}</h4>
+                            <p>Schüler</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="stat-item">
+                            <h4>{{ klasse.unterrichtseinheiten|length }}</h4>
+                            <p>Unterrichtsstunden</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="stat-item">
+                            <h4>{{ klasse.lehrer_zuordnungen|length }}</h4>
+                            <p>Zugeordnete Lehrer</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function deleteKlasse(klasse_id) {
+    if (confirm('Sind Sie sicher, dass Sie diese Klasse löschen möchten?\n\nAlle Schüler, Unterrichtseinheiten und Anwesenheitsdaten werden ebenfalls gelöscht!')) {
+        if (confirm('Diese Aktion kann nicht rückgängig gemacht werden. Wirklich fortfahren?')) {
+            fetch(`/klasse_loeschen/${klasse_id}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.href = '{{ url_for("klassenbuch") }}';
+                } else {
+                    alert('Fehler beim Löschen der Klasse: ' + data.message);
+                }
+            });
+        }
+    }
+}
+</script>
+
+<style>
+.stat-item h4 {
+    color: #007bff;
+    margin-bottom: 0.5rem;
+}
+
+.stat-item p {
+    color: #6c757d;
+    margin-bottom: 0;
+}
+</style>
+{% endblock %}

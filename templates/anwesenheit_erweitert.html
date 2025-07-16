@@ -1,0 +1,420 @@
+{% extends "base.html" %}
+
+{% block title %}Anwesenheit - {{ unterrichtseinheit.thema }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h1><i class="fas fa-check-circle"></i> Anwesenheitskontrolle</h1>
+            <p class="text-muted">
+                {{ unterrichtseinheit.klasse.name }} - {{ unterrichtseinheit.datum.strftime('%d.%m.%Y') }} - {{ unterrichtseinheit.stunden }}
+            </p>
+        </div>
+        <div>
+            <a href="{{ url_for('klassenbuch_details', klasse_id=unterrichtseinheit.klasse.id) }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Zurück
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card dashboard-card">
+            <div class="card-header">
+                <h5><i class="fas fa-book-open"></i> Unterrichtseinheit</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <strong>Thema:</strong> {{ unterrichtseinheit.thema }}
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Datum:</strong> {{ unterrichtseinheit.datum.strftime('%d.%m.%Y') }}
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-md-6">
+                        <strong>Stunden:</strong> {{ unterrichtseinheit.stunden }}
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Lehrer:</strong> {{ unterrichtseinheit.lehrer.username if unterrichtseinheit.lehrer else 'Nicht zugeordnet' }}
+                    </div>
+                </div>
+                {% if unterrichtseinheit.inhalte %}
+                <div class="row mt-2">
+                    <div class="col-12">
+                        <strong>Inhalte:</strong>
+                        <p class="text-muted">{{ unterrichtseinheit.inhalte }}</p>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card dashboard-card">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-pie"></i> Schnellübersicht</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-6">
+                        <div class="stats-card p-3">
+                            <h4 id="anwesendCount">0</h4>
+                            <small>Anwesend</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="stats-card p-3">
+                            <h4 id="abwesendCount">0</h4>
+                            <small>Abwesend</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="row text-center mt-3">
+                    <div class="col-6">
+                        <div class="stats-card p-3">
+                            <h4 id="verspaetetCount">0</h4>
+                            <small>Verspätet</small>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="stats-card p-3">
+                            <h4 id="entschuldigtCount">0</h4>
+                            <small>Entschuldigt</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card dashboard-card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5><i class="fas fa-users"></i> Schülerliste</h5>
+                    <div>
+                        <button type="button" class="btn btn-sm btn-success" onclick="markAllPresent()">
+                            <i class="fas fa-check-double"></i> Alle anwesend
+                        </button>
+                        <button type="button" class="btn btn-sm btn-warning" onclick="clearAll()">
+                            <i class="fas fa-eraser"></i> Alle zurücksetzen
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('anwesenheit_speichern_erweitert') }}" id="anwesenheitForm">
+                    <input type="hidden" name="unterrichtseinheit_id" value="{{ unterrichtseinheit.id }}">
+                    <input type="hidden" name="klasse_id" value="{{ unterrichtseinheit.klasse.id }}">
+                    
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Schüler</th>
+                                    <th>Familie</th>
+                                    <th>Status</th>
+                                    <th>Verspätung</th>
+                                    <th>Bemerkung</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for schueler in schueler %}
+                                {% set anwesenheit = anwesenheiten.get(schueler.id) %}
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center">
+                                            <div class="avatar-circle me-2">
+                                                {{ schueler.name[0] }}{{ schueler.nachname[0] }}
+                                            </div>
+                                            <div>
+                                                <strong>{{ schueler.name }} {{ schueler.nachname }}</strong>
+                                                <br>
+                                                <small class="text-muted">
+                                                    {% if schueler.geburtsdatum %}
+                                                        {{ schueler.geburtsdatum.strftime('%d.%m.%Y') }}
+                                                    {% endif %}
+                                                </small>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if schueler.familie %}
+                                            <small class="text-muted">{{ schueler.familie.familienname }}</small>
+                                        {% else %}
+                                            <small class="text-muted">-</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group" data-schueler-id="{{ schueler.id }}">
+                                            <input type="hidden" name="status_{{ schueler.id }}" value="{{ anwesenheit.status if anwesenheit else 'abwesend' }}">
+                                            
+                                            <button type="button" class="btn btn-outline-success status-btn" 
+                                                    data-status="anwesend" 
+                                                    onclick="setStatus({{ schueler.id }}, 'anwesend', this)">
+                                                <i class="fas fa-check"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-danger status-btn" 
+                                                    data-status="abwesend" 
+                                                    onclick="setStatus({{ schueler.id }}, 'abwesend', this)">
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-warning status-btn" 
+                                                    data-status="verspätet" 
+                                                    onclick="setStatus({{ schueler.id }}, 'verspätet', this)">
+                                                <i class="fas fa-clock"></i>
+                                            </button>
+                                            <button type="button" class="btn btn-outline-info status-btn" 
+                                                    data-status="entschuldigt" 
+                                                    onclick="setStatus({{ schueler.id }}, 'entschuldigt', this)">
+                                                <i class="fas fa-file-medical"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="input-group input-group-sm">
+                                            <input type="number" 
+                                                   class="form-control" 
+                                                   name="verspätung_{{ schueler.id }}" 
+                                                   value="{{ anwesenheit.verspätung_minuten if anwesenheit else 0 }}"
+                                                   min="0" 
+                                                   max="120"
+                                                   placeholder="Min">
+                                            <span class="input-group-text">min</span>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <input type="text" 
+                                               class="form-control form-control-sm" 
+                                               name="bemerkung_{{ schueler.id }}" 
+                                               value="{{ anwesenheit.bemerkung if anwesenheit else '' }}"
+                                               placeholder="Bemerkung...">
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="d-flex justify-content-end mt-3">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Anwesenheit speichern
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.avatar-circle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    font-size: 0.8rem;
+}
+
+.status-btn.active {
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.5);
+}
+
+.btn-outline-success.active {
+    background-color: #28a745;
+    border-color: #28a745;
+    color: white;
+}
+
+.btn-outline-danger.active {
+    background-color: #dc3545;
+    border-color: #dc3545;
+    color: white;
+}
+
+.btn-outline-warning.active {
+    background-color: #ffc107;
+    border-color: #ffc107;
+    color: black;
+}
+
+.btn-outline-info.active {
+    background-color: #17a2b8;
+    border-color: #17a2b8;
+    color: white;
+}
+
+.stats-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border-radius: 10px;
+    margin: 2px;
+}
+
+.table th {
+    border-top: none;
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+.table td {
+    vertical-align: middle;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function setStatus(schuelerId, status, button) {
+    // Alle Buttons in der Gruppe deaktivieren
+    const buttonGroup = button.closest('.btn-group');
+    const buttons = buttonGroup.querySelectorAll('.status-btn');
+    buttons.forEach(btn => btn.classList.remove('active'));
+    
+    // Aktuellen Button aktivieren
+    button.classList.add('active');
+    
+    // Hidden Input aktualisieren
+    const hiddenInput = buttonGroup.querySelector('input[type="hidden"]');
+    hiddenInput.value = status;
+    
+    // Statistiken aktualisieren
+    updateStats();
+}
+
+function markAllPresent() {
+    const buttons = document.querySelectorAll('[data-status="anwesend"]');
+    buttons.forEach(button => {
+        const schuelerId = button.closest('[data-schueler-id]').getAttribute('data-schueler-id');
+        setStatus(schuelerId, 'anwesend', button);
+    });
+}
+
+function clearAll() {
+    const buttons = document.querySelectorAll('[data-status="abwesend"]');
+    buttons.forEach(button => {
+        const schuelerId = button.closest('[data-schueler-id]').getAttribute('data-schueler-id');
+        setStatus(schuelerId, 'abwesend', button);
+    });
+    
+    // Alle Verspätungen und Bemerkungen zurücksetzen
+    document.querySelectorAll('input[name^="verspätung_"]').forEach(input => {
+        input.value = 0;
+    });
+    document.querySelectorAll('input[name^="bemerkung_"]').forEach(input => {
+        input.value = '';
+    });
+}
+
+function updateStats() {
+    const statusCounts = {
+        anwesend: 0,
+        abwesend: 0,
+        verspätet: 0,
+        entschuldigt: 0
+    };
+    
+    document.querySelectorAll('input[name^="status_"]').forEach(input => {
+        const status = input.value;
+        if (statusCounts.hasOwnProperty(status)) {
+            statusCounts[status]++;
+        }
+    });
+    
+    document.getElementById('anwesendCount').textContent = statusCounts.anwesend;
+    document.getElementById('abwesendCount').textContent = statusCounts.abwesend;
+    document.getElementById('verspaetetCount').textContent = statusCounts.verspätet;
+    document.getElementById('entschuldigtCount').textContent = statusCounts.entschuldigt;
+}
+
+// Beim Laden der Seite: Bestehende Anwesenheit laden
+document.addEventListener('DOMContentLoaded', function() {
+    // Bestehende Status setzen
+    {% for schueler in schueler %}
+        {% set anwesenheit = anwesenheiten.get(schueler.id) %}
+        {% if anwesenheit %}
+            const button{{ schueler.id }} = document.querySelector(`[data-schueler-id="{{ schueler.id }}"] [data-status="{{ anwesenheit.status }}"]`);
+            if (button{{ schueler.id }}) {
+                button{{ schueler.id }}.classList.add('active');
+            }
+        {% else %}
+            // Default: abwesend
+            const button{{ schueler.id }} = document.querySelector(`[data-schueler-id="{{ schueler.id }}"] [data-status="abwesend"]`);
+            if (button{{ schueler.id }}) {
+                button{{ schueler.id }}.classList.add('active');
+            }
+        {% endif %}
+    {% endfor %}
+    
+    // Statistiken initial berechnen
+    updateStats();
+    
+    // Auto-Save alle 30 Sekunden
+    setInterval(function() {
+        const formData = new FormData(document.getElementById('anwesenheitForm'));
+        console.log('Auto-saving attendance data...');
+        // Hier könnte AJAX-Speicherung implementiert werden
+    }, 30000);
+});
+
+// Formular-Validierung
+document.getElementById('anwesenheitForm').addEventListener('submit', function(e) {
+    // Überprüfen ob alle Schüler einen Status haben
+    const statusInputs = document.querySelectorAll('input[name^="status_"]');
+    let allSet = true;
+    
+    statusInputs.forEach(input => {
+        if (!input.value || input.value === '') {
+            allSet = false;
+        }
+    });
+    
+    if (!allSet) {
+        if (!confirm('Nicht alle Schüler haben einen Anwesenheitsstatus. Trotzdem speichern?')) {
+            e.preventDefault();
+            return false;
+        }
+    }
+    
+    // Erfolgsmeldung anzeigen
+    const button = this.querySelector('button[type="submit"]');
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Speichern...';
+    button.disabled = true;
+    
+    return true;
+});
+
+// Tastatur-Shortcuts
+document.addEventListener('keydown', function(e) {
+    if (e.ctrlKey || e.metaKey) {
+        switch(e.key) {
+            case 's':
+                e.preventDefault();
+                document.getElementById('anwesenheitForm').submit();
+                break;
+            case 'a':
+                e.preventDefault();
+                markAllPresent();
+                break;
+            case 'r':
+                e.preventDefault();
+                clearAll();
+                break;
+        }
+    }
+});
+</script>
+{% endblock %}

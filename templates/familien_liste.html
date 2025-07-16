@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block title %}Familien - Virtuelles Klassenbuch{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h1><i class="fas fa-users"></i> Familienverwaltung</h1>
+            <p class="text-muted">Verwalten Sie Familien und ihre Kontaktdaten</p>
+        </div>
+        <div>
+            <a href="{{ url_for('familie_erstellen') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> Neue Familie
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card dashboard-card">
+            <div class="card-header">
+                <h5><i class="fas fa-list"></i> Familien-Übersicht</h5>
+            </div>
+            <div class="card-body">
+                {% if familien %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Familienname</th>
+                                    <th>Kontaktperson</th>
+                                    <th>Telefon</th>
+                                    <th>E-Mail</th>
+                                    <th>Kinder</th>
+                                    <th>Spenden</th>
+                                    <th>Aktionen</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for familie in familien %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ familie.familienname }}</strong>
+                                        {% if familie.adresse %}
+                                            <br>
+                                            <small class="text-muted">{{ familie.adresse }}</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ familie.kontaktperson or '-' }}</td>
+                                    <td>
+                                        {% if familie.telefon %}
+                                            <a href="tel:{{ familie.telefon }}">{{ familie.telefon }}</a>
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if familie.email %}
+                                            <a href="mailto:{{ familie.email }}">{{ familie.email }}</a>
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if familie.kinder %}
+                                            <span class="badge bg-primary">{{ familie.kinder|length }}</span>
+                                            <div class="small">
+                                                {% for kind in familie.kinder %}
+                                                    <div>{{ kind.name }} {{ kind.nachname }}</div>
+                                                {% endfor %}
+                                            </div>
+                                        {% else %}
+                                            <span class="badge bg-secondary">0</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if familie.spenden %}
+                                            <span class="badge bg-success">{{ familie.spenden|length }}</span>
+                                            <div class="small">
+                                                {% set total_spenden = familie.spenden|sum(attribute='betrag') %}
+                                                Gesamt: {{ "%.2f"|format(total_spenden) }}€
+                                            </div>
+                                        {% else %}
+                                            <span class="badge bg-secondary">0</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a href="{{ url_for('familie_bearbeiten', familie_id=familie.id) }}" 
+                                               class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                            <button type="button" class="btn btn-sm btn-outline-danger" 
+                                                    onclick="confirmDelete({{ familie.id }}, '{{ familie.familienname }}')">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-users fa-5x text-muted mb-4"></i>
+                        <h4>Keine Familien vorhanden</h4>
+                        <p class="text-muted">Erstellen Sie Ihre erste Familie, um Schüler und Kontaktdaten zu verwalten.</p>
+                        <a href="{{ url_for('familie_erstellen') }}" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Erste Familie erstellen
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Lösch-Bestätigungsmodal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Familie löschen</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Möchten Sie die Familie <strong id="familienname"></strong> wirklich löschen?</p>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <strong>Achtung:</strong> Dieser Vorgang kann nicht rückgängig gemacht werden. 
+                    Alle Verknüpfungen zu Schülern und Spenden werden entfernt.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
+                <form id="deleteForm" method="POST" class="d-inline">
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash"></i> Löschen
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function confirmDelete(familieId, familienname) {
+    document.getElementById('familienname').textContent = familienname;
+    document.getElementById('deleteForm').action = `/familie_loeschen/${familieId}`;
+    
+    const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    modal.show();
+}
+
+// Suchfunktion für Familien
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.createElement('input');
+    searchInput.type = 'text';
+    searchInput.className = 'form-control mb-3';
+    searchInput.placeholder = 'Familien durchsuchen...';
+    searchInput.addEventListener('input', function() {
+        const filter = this.value.toLowerCase();
+        const rows = document.querySelectorAll('tbody tr');
+        
+        rows.forEach(row => {
+            const text = row.textContent.toLowerCase();
+            row.style.display = text.includes(filter) ? '' : 'none';
+        });
+    });
+    
+    const cardBody = document.querySelector('.card-body');
+    const table = cardBody.querySelector('.table-responsive');
+    if (table) {
+        cardBody.insertBefore(searchInput, table);
+    }
+});
+</script>
+{% endblock %}
