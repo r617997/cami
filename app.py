@@ -4,23 +4,38 @@ import json
 import os
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.utils import secure_filename
-import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
 from io import BytesIO
 from collections import defaultdict
-from flask_moment import Moment
-from matplotlib.backends.backend_pdf import PdfPages
 from flask_migrate import Migrate
 from sqlalchemy import func
+
+# Optionale Importe für Diagramme und Excel
+try:
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import pandas as pd
+    from matplotlib.backends.backend_pdf import PdfPages
+    HAS_CHARTS = True
+except ImportError:
+    HAS_CHARTS = False
+    print("⚠️  Matplotlib/Pandas nicht verfügbar - Diagramme deaktiviert")
+
+# Optionale Importe für Flask-Moment
+try:
+    from flask_moment import Moment
+    HAS_MOMENT = True
+except ImportError:
+    HAS_MOMENT = False
+    print("⚠️  Flask-Moment nicht verfügbar - Zeitfunktionen deaktiviert")
 
 #from weasyprint import HTML, CSS
 # App erstellen
 app = Flask(__name__)
 app.secret_key = 'dein_geheimer_schlüssel_12345'
 
-# Flask-Moment initialisieren
-moment = Moment(app)
+# Flask-Moment initialisieren (falls verfügbar)
+if HAS_MOMENT:
+    moment = Moment(app)
 
 # Datenbank konfigurieren (nur SQLite)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///local.db'
@@ -157,10 +172,10 @@ class Transaction(db.Model):
         return f"<Transaction {self.description}>"
 
 # MODELS
+
 class User(db.Model):
-    __tablename__ = 'user'
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
+    username = db.Column(db.String(64), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(256), nullable=False)
     is_admin = db.Column(db.Boolean, default=False)
@@ -332,8 +347,33 @@ def load_updates():
         save_updates()
 
 # Datenbank initialisieren
-with app.app_context():
-    db.create_all()
+def init_database():
+    """Datenbank initialisieren mit Fehlerbehandlung"""
+    try:
+        with app.app_context():
+            db.create_all()
+            print("✅ Datenbank erfolgreich initialisiert!")
+            
+            # Test-Daten erstellen falls keine vorhanden
+            if User.query.count() == 0:
+                admin_user = User(
+                    username='admin',
+                    email='admin@moschee.de',
+                    password_hash='admin123',
+                    is_admin=True
+                )
+                db.session.add(admin_user)
+                db.session.commit()
+                print("✅ Test-Admin erstellt (admin/admin123)")
+            
+            return True
+    except Exception as e:
+        print(f"❌ Fehler beim Initialisieren der Datenbank: {e}")
+        return False
+
+# Datenbank initialisieren
+if not init_database():
+    print("⚠️  Datenbank konnte nicht initialisiert werden. Bitte prüfen Sie die Modelle.")
 
 load_updates()
 
@@ -383,6 +423,21 @@ def index():
                            total_posts=total_posts,
                            posts_per_slide=posts_per_slide)
 
+@app.route('/db_test')
+def db_test():
+    """Test-Route um die Datenbank zu prüfen"""
+    try:
+        user_count = User.query.count()
+        klasse_count = Klasse.query.count()
+        return f"""
+        <h1>🎉 Datenbank-Test erfolgreich!</h1>
+        <p>Benutzer in der Datenbank: {user_count}</p>
+        <p>Klassen in der Datenbank: {klasse_count}</p>
+        <p><a href="/klassenbuch">Zum Klassenbuch</a></p>
+        <p><a href="/">Zurück zur Startseite</a></p>
+        """
+    except Exception as e:
+        return f"<h1>❌ Datenbank-Fehler:</h1><p>{str(e)}</p>"
 
 @app.route('/blog')
 def blog():
@@ -2734,8 +2789,10 @@ def schueler_import():
             return redirect(request.url)
         
         if file and file.filename.endswith('.xlsx'):
+            if not HAS_CHARTS:
+                flash('Excel-Import nicht verfügbar. Pandas ist nicht installiert.', 'danger')
+                return redirect(request.url)
             try:
-                import pandas as pd
                 df = pd.read_excel(file)
                 klasse_id = request.form.get('klasse_id')
                 
@@ -2768,11 +2825,12 @@ def schueler_import():
 @app.route('/schueler_export/<int:klasse_id>')
 def schueler_export(klasse_id):
     """Schüler als Excel exportieren"""
+    if not HAS_CHARTS:
+        flash('Excel-Export nicht verfügbar. Pandas ist nicht installiert.', 'danger')
+        return redirect(url_for('klassenbuch_details', klasse_id=klasse_id))
+    
     klasse = Klasse.query.get_or_404(klasse_id)
     schueler = Schueler.query.filter_by(klasse_id=klasse_id).all()
-    
-    import pandas as pd
-    from io import BytesIO
     
     # Daten vorbereiten
     data = []
