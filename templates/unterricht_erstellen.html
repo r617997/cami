@@ -1,148 +1,102 @@
 {% extends "base.html" %}
-
-{% block title %}Unterrichtseinheit erstellen{% endblock %}
+{% block title %}Unterricht erstellen{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <h1><i class="fas fa-chalkboard-teacher"></i> Neue Unterrichtseinheit</h1>
-    <p class="text-muted">Dokumentieren Sie eine neue Unterrichtsstunde</p>
-</div>
-
-<div class="row justify-content-center">
-    <div class="col-md-10">
-        <div class="card">
-            <div class="card-header">
-                <h5><i class="fas fa-book"></i> Unterrichts-Informationen</h5>
-            </div>
-            <div class="card-body">
-                <form method="POST" enctype="multipart/form-data">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="klasse_id" class="form-label">
-                                    <i class="fas fa-users"></i> Klasse *
-                                </label>
-                                <select class="form-select" id="klasse_id" name="klasse_id" required>
-                                    <option value="">Klasse wählen</option>
-                                    {% for klasse in klassen %}
-                                    <option value="{{ klasse.id }}">{{ klasse.name }} ({{ klasse.schuljahr }})</option>
-                                    {% endfor %}
-                                </select>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="datum" class="form-label">
-                                    <i class="fas fa-calendar"></i> Datum *
-                                </label>
-                                <input type="date" class="form-control" id="datum" name="datum" required value="{{ heute }}">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="stunden" class="form-label">
-                                    <i class="fas fa-clock"></i> Unterrichtsstunden *
-                                </label>
-                                <input type="text" class="form-control" id="stunden" name="stunden" required
-                                       placeholder="z.B. 1-2 oder 14:00-15:30">
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="thema" class="form-label">
-                                    <i class="fas fa-bookmark"></i> Thema *
-                                </label>
-                                <input type="text" class="form-control" id="thema" name="thema" required
-                                       placeholder="z.B. Quran Sure Al-Fatiha">
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="inhalte" class="form-label">
-                            <i class="fas fa-list"></i> Unterrichtsinhalte
-                        </label>
-                        <textarea class="form-control" id="inhalte" name="inhalte" rows="4"
-                                  placeholder="Detaillierte Beschreibung der behandelten Inhalte..."></textarea>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="hausaufgaben" class="form-label">
-                            <i class="fas fa-home"></i> Hausaufgaben
-                        </label>
-                        <textarea class="form-control" id="hausaufgaben" name="hausaufgaben" rows="3"
-                                  placeholder="Aufgaben für die Schüler bis zur nächsten Stunde..."></textarea>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="bemerkung" class="form-label">
-                            <i class="fas fa-comment"></i> Bemerkungen
-                        </label>
-                        <textarea class="form-control" id="bemerkung" name="bemerkung" rows="3"
-                                  placeholder="Besondere Vorkommnisse, Anmerkungen..."></textarea>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="materialien" class="form-label">
-                            <i class="fas fa-upload"></i> Materialien hochladen
-                        </label>
-                        <input type="file" class="form-control" id="materialien" name="materialien" multiple
-                               accept=".pdf,.doc,.docx,.jpg,.png,.mp3,.mp4">
-                        <div class="form-text">
-                            Sie können mehrere Dateien hochladen (PDFs, Bilder, Audio, Video).
-                        </div>
-                    </div>
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <button type="submit" class="btn btn-primary w-100">
-                                <i class="fas fa-save"></i> Unterrichtseinheit erstellen
-                            </button>
-                        </div>
-                        <div class="col-md-6">
-                            <a href="{{ url_for('klassenbuch') }}" class="btn btn-secondary w-100">
-                                <i class="fas fa-times"></i> Abbrechen
-                            </a>
-                        </div>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row justify-content-center mt-4">
-    <div class="col-md-10">
-        <div class="card">
-            <div class="card-header">
-                <h5><i class="fas fa-lightbulb"></i> Tipps zur Unterrichtsdokumentation</h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6><i class="fas fa-check-circle text-success"></i> Empfohlene Inhalte:</h6>
-                        <ul class="list-unstyled">
-                            <li>• Behandelte Verse oder Suren</li>
-                            <li>• Gelehrte Regeln (Tajwid)</li>
-                            <li>• Diskutierte Themen</li>
-                            <li>• Praktische Übungen</li>
-                        </ul>
-                    </div>
-                    <div class="col-md-6">
-                        <h6><i class="fas fa-home text-primary"></i> Hausaufgaben-Ideen:</h6>
-                        <ul class="list-unstyled">
-                            <li>• Verse auswendig lernen</li>
-                            <li>• Wiederholung der Regeln</li>
-                            <li>• Schriftliche Übungen</li>
-                            <li>• Recherche zu Themen</li>
-                        </ul>
-                    </div>
+<div class="container mt-5">
+    <h1>Unterricht erstellen</h1>
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                 </div>
-            </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    <div class="card">
+        <div class="card-body">
+            <form action="{{ url_for('unterricht_erstellen') }}" method="POST">
+                <div class="mb-3">
+                    <label for="datum" class="form-label">Datum</label>
+                    <input type="date" class="form-control" id="datum" name="datum" value="{{ current_date }}" required>
+                </div>
+                <div class="mb-3">
+                    <label for="klasse_id" class="form-label">Klasse</label>
+                    <select class="form-select" id="klasse_id" name="klasse_id" required>
+                        <option value="">Klasse auswählen</option>
+                        {% for klasse in klassen %}
+                        <option value="{{ klasse.id }}">{{ klasse.name }} ({{ klasse.schuljahr }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <hr>
+                <h4>Unterrichtseinheiten für diesen Tag</h4>
+                <table class="table table-bordered" id="lesson-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 15%;">Stunde(n)</th>
+                            <th style="width: 30%;">Thema</th>
+                            <th>Inhalte / Bemerkung</th>
+                            <th style="width: 10%;">Aktion</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><input type="text" class="form-control" name="stunden[]" placeholder="z.B. 1, 3-5" required></td>
+                            <td><input type="text" class="form-control" name="themen[]" required></td>
+                            <td><textarea class="form-control" name="inhalte[]"></textarea></td>
+                            <td><button type="button" class="btn btn-danger remove-row"><i class="fas fa-trash"></i></button></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <button type="button" class="btn btn-success mb-3" id="add-row"><i class="fas fa-plus me-1"></i> Unterrichtseinheit hinzufügen</button>
+
+                <div class="d-flex justify-content-end">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i> Speichern
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
+{% endblock %}
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const addRowBtn = document.getElementById('add-row');
+    const lessonTableBody = document.querySelector('#lesson-table tbody');
+
+    // Function to attach remove event listeners to all remove buttons
+    function attachRemoveEvent() {
+        document.querySelectorAll('.remove-row').forEach(button => {
+            button.onclick = function() {
+                // Ensure at least one row remains
+                if (lessonTableBody.rows.length > 1) {
+                    this.closest('tr').remove();
+                } else {
+                    alert('Es muss mindestens eine Unterrichtseinheit vorhanden sein.');
+                }
+            };
+        });
+    }
+
+    // Add row functionality
+    addRowBtn.addEventListener('click', function() {
+        const newRow = lessonTableBody.insertRow();
+        newRow.innerHTML = `
+            <td><input type="text" class="form-control" name="stunden[]" placeholder="z.B. 1, 3-5" required></td>
+            <td><input type="text" class="form-control" name="themen[]" required></td>
+            <td><textarea class="form-control" name="inhalte[]"></textarea></td>
+            <td><button type="button" class="btn btn-danger remove-row"><i class="fas fa-trash"></i></button></td>
+        `;
+        attachRemoveEvent(); // Attach event listener to the new remove button
+    });
+
+    // Attach remove event listeners to initial rows
+    attachRemoveEvent();
+});
+</script>
 {% endblock %}
