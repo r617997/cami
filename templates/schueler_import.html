@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Schüler Import{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-upload"></i> Schüler Import</h1>
+    <p class="text-muted">Importieren Sie Schüler aus Excel-Dateien</p>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-file-excel"></i> Excel-Datei hochladen</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="file" class="form-label">
+                            <i class="fas fa-file"></i> Excel-Datei auswählen *
+                        </label>
+                        <input type="file" class="form-control" id="file" name="file" 
+                               accept=".xlsx,.xls,.csv" required>
+                        <div class="form-text">
+                            Unterstützte Formate: .xlsx, .xls, .csv
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="klasse_id" class="form-label">
+                            <i class="fas fa-users"></i> Zielklasse *
+                        </label>
+                        <select class="form-select" id="klasse_id" name="klasse_id" required>
+                            <option value="">Klasse auswählen</option>
+                            {% for klasse in klassen %}
+                            <option value="{{ klasse.id }}">{{ klasse.name }} ({{ klasse.schuljahr }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-upload"></i> Datei importieren
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <a href="{{ url_for('klassenbuch') }}" class="btn btn-secondary w-100">
+                                <i class="fas fa-times"></i> Abbrechen
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row justify-content-center mt-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-info-circle"></i> Formathinweise</h5>
+            </div>
+            <div class="card-body">
+                <h6>Erforderliche Spalten:</h6>
+                <ul>
+                    <li><strong>Vorname</strong> (oder "name")</li>
+                    <li><strong>Nachname</strong> (oder "nachname")</li>
+                </ul>
+                
+                <h6>Optionale Spalten:</h6>
+                <ul>
+                    <li><strong>Geburtsdatum</strong> (Format: TT.MM.YYYY oder YYYY-MM-DD)</li>
+                    <li><strong>Geschlecht</strong> (M/W oder männlich/weiblich)</li>
+                    <li><strong>Notfallkontakt</strong> (Telefonnummer)</li>
+                    <li><strong>Familie</strong> (Familienname)</li>
+                </ul>
+                
+                <div class="alert alert-info mt-3">
+                    <i class="fas fa-lightbulb"></i>
+                    <strong>Tipp:</strong> Die erste Zeile sollte die Spaltenüberschriften enthalten.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

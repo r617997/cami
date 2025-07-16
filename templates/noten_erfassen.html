@@ -1,0 +1,402 @@
+{% extends "base.html" %}
+
+{% block title %}Noten erfassen - {{ klasse.name }}{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="d-flex justify-content-between align-items-center">
+        <div>
+            <h1><i class="fas fa-star"></i> Noten erfassen</h1>
+            <p class="text-muted">Klasse: {{ klasse.name }} ({{ klasse.schuljahr }})</p>
+        </div>
+        <div>
+            <a href="{{ url_for('klassenbuch_details', klasse_id=klasse.id) }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Zurück zum Klassenbuch
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card dashboard-card">
+            <div class="card-header">
+                <h5><i class="fas fa-clipboard-list"></i> Bewertungen mit Checklisten</h5>
+            </div>
+            <div class="card-body">
+                {% if schueler and kategorien %}
+                    <form method="POST" action="{{ url_for('note_speichern') }}" id="notenForm">
+                        <input type="hidden" name="klasse_id" value="{{ klasse.id }}">
+                        
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label for="schueler_id" class="form-label">Schüler auswählen</label>
+                                <select name="schueler_id" id="schueler_id" class="form-select" required>
+                                    <option value="">Bitte wählen...</option>
+                                    {% for schueler in schueler %}
+                                        <option value="{{ schueler.id }}">{{ schueler.name }} {{ schueler.nachname }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="kategorie_id" class="form-label">Bewertungskategorie</label>
+                                <select name="kategorie_id" id="kategorie_id" class="form-select" required onchange="loadKriterien()">
+                                    <option value="">Bitte wählen...</option>
+                                    {% for kategorie in kategorien %}
+                                        <option value="{{ kategorie.id }}" data-beschreibung="{{ kategorie.beschreibung }}">
+                                            {{ kategorie.name }} (max. {{ kategorie.max_punkte }} Punkte)
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div id="kategorieBeschreibung" class="alert alert-info" style="display: none;">
+                            <i class="fas fa-info-circle"></i>
+                            <span id="beschreibungText"></span>
+                        </div>
+                        
+                        <div class="row mb-4">
+                            <div class="col-md-6">
+                                <label for="bewertung" class="form-label">Bewertung (1-5 Sterne)</label>
+                                <div class="star-rating-input">
+                                    <input type="hidden" name="bewertung" id="bewertung" value="0">
+                                    <div class="star-container">
+                                        {% for i in range(1, 6) %}
+                                            <i class="far fa-star star" data-rating="{{ i }}" onclick="setRating({{ i }})"></i>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="rating-text mt-2">
+                                        <span id="ratingText" class="text-muted">Keine Bewertung</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label for="datum" class="form-label">Datum</label>
+                                <input type="date" name="datum" id="datum" class="form-control" value="{{ heute }}" required>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label for="bemerkung" class="form-label">Bemerkung</label>
+                            <textarea name="bemerkung" id="bemerkung" class="form-control" rows="3" placeholder="Zusätzliche Bemerkungen zur Bewertung..."></textarea>
+                        </div>
+                        
+                        <div id="kriterienContainer" class="mb-4" style="display: none;">
+                            <h6><i class="fas fa-check-square"></i> Bewertungskriterien</h6>
+                            <div class="alert alert-light">
+                                <small class="text-muted">Kreuzen Sie die erfüllten Kriterien an:</small>
+                            </div>
+                            <div id="kriterienListe" class="row">
+                                <!-- Kriterien werden dynamisch geladen -->
+                            </div>
+                        </div>
+                        
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <button type="button" class="btn btn-outline-secondary" onclick="resetForm()">
+                                <i class="fas fa-undo"></i> Zurücksetzen
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Bewertung speichern
+                            </button>
+                        </div>
+                    </form>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-exclamation-triangle fa-5x text-muted mb-4"></i>
+                        <h4>Keine Schüler oder Kategorien vorhanden</h4>
+                        <p class="text-muted">
+                            {% if not schueler %}
+                                Fügen Sie zuerst Schüler zu dieser Klasse hinzu.
+                            {% endif %}
+                            {% if not kategorien %}
+                                Erstellen Sie zuerst Bewertungskategorien.
+                            {% endif %}
+                        </p>
+                        <div class="d-flex justify-content-center gap-2">
+                            {% if not schueler %}
+                                <a href="{{ url_for('schueler_erstellen', klasse_id=klasse.id) }}" class="btn btn-primary">
+                                    <i class="fas fa-user-plus"></i> Schüler hinzufügen
+                                </a>
+                            {% endif %}
+                            {% if not kategorien %}
+                                <a href="{{ url_for('kategorie_erstellen') }}" class="btn btn-success">
+                                    <i class="fas fa-plus"></i> Kategorie erstellen
+                                </a>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Letzte Bewertungen -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card dashboard-card">
+            <div class="card-header">
+                <h5><i class="fas fa-history"></i> Letzte Bewertungen</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Datum</th>
+                                <th>Schüler</th>
+                                <th>Kategorie</th>
+                                <th>Bewertung</th>
+                                <th>Bemerkung</th>
+                                <th>Aktionen</th>
+                            </tr>
+                        </thead>
+                        <tbody id="letzteNoten">
+                            <!-- Wird per JavaScript geladen -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.star-rating-input {
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 10px;
+}
+
+.star-container {
+    font-size: 2rem;
+    color: #ffc107;
+    cursor: pointer;
+}
+
+.star-container .star {
+    margin: 0 5px;
+    transition: all 0.2s;
+}
+
+.star-container .star:hover {
+    transform: scale(1.1);
+}
+
+.star-container .star.fas {
+    color: #ffc107;
+}
+
+.star-container .star.far {
+    color: #dee2e6;
+}
+
+.checklist-item {
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    transition: all 0.3s;
+}
+
+.checklist-item:hover {
+    background: #e9ecef;
+}
+
+.checklist-item.checked {
+    background: #d4edda;
+    border-left: 4px solid #28a745;
+}
+
+.form-check-input {
+    transform: scale(1.2);
+}
+
+.rating-text {
+    font-weight: bold;
+}
+
+.kategorie-info {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 15px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const ratingTexts = [
+    'Keine Bewertung',
+    'Sehr schlecht',
+    'Schlecht', 
+    'Befriedigend',
+    'Gut',
+    'Sehr gut'
+];
+
+function setRating(rating) {
+    // Alle Sterne zurücksetzen
+    const stars = document.querySelectorAll('.star');
+    stars.forEach(star => {
+        star.classList.remove('fas');
+        star.classList.add('far');
+    });
+    
+    // Sterne bis zur gewählten Bewertung füllen
+    for (let i = 1; i <= rating; i++) {
+        const star = document.querySelector(`[data-rating="${i}"]`);
+        star.classList.remove('far');
+        star.classList.add('fas');
+    }
+    
+    // Bewertung speichern
+    document.getElementById('bewertung').value = rating;
+    document.getElementById('ratingText').textContent = ratingTexts[rating];
+    
+    // Farbe des Bewertungstexts anpassen
+    const textEl = document.getElementById('ratingText');
+    textEl.className = 'text-muted';
+    if (rating >= 4) textEl.className = 'text-success';
+    else if (rating >= 3) textEl.className = 'text-warning';
+    else if (rating >= 1) textEl.className = 'text-danger';
+}
+
+function loadKriterien() {
+    const kategorieSelect = document.getElementById('kategorie_id');
+    const selectedOption = kategorieSelect.options[kategorieSelect.selectedIndex];
+    const kategorieId = selectedOption.value;
+    const beschreibung = selectedOption.getAttribute('data-beschreibung');
+    
+    // Beschreibung anzeigen
+    const beschreibungDiv = document.getElementById('kategorieBeschreibung');
+    const beschreibungText = document.getElementById('beschreibungText');
+    if (beschreibung) {
+        beschreibungText.textContent = beschreibung;
+        beschreibungDiv.style.display = 'block';
+    } else {
+        beschreibungDiv.style.display = 'none';
+    }
+    
+    if (kategorieId) {
+        // Kriterien laden (hier vereinfacht - in echter App würde AJAX verwendet)
+        const kriterienContainer = document.getElementById('kriterienContainer');
+        const kriterienListe = document.getElementById('kriterienListe');
+        
+        // Beispiel-Kriterien basierend auf Kategorie
+        const beispielKriterien = {
+            '1': [ // Koranlesen
+                'Tajwid beachtet',
+                'Aussprache korrekt',
+                'Flüssigkeit',
+                'Betonung richtig'
+            ],
+            '2': [ // Religiöses Wissen
+                'Grundlagen verstanden',
+                'Anwendung richtig',
+                'Zusatzwissen gezeigt',
+                'Fragen beantwortet'
+            ],
+            '3': [ // Verhalten
+                'Respektvoll',
+                'Aufmerksam',
+                'Hilfsbereit',
+                'Pünktlich'
+            ]
+        };
+        
+        const kriterien = beispielKriterien[kategorieId] || [];
+        
+        kriterienListe.innerHTML = '';
+        kriterien.forEach((kriterium, index) => {
+            const kriteriumId = `kriterium_${kategorieId}_${index}`;
+            const html = `
+                <div class="col-md-6 mb-3">
+                    <div class="checklist-item">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="${kriteriumId}" name="kriterium_${kategorieId}_${index}" onchange="toggleKriterium(this)">
+                            <label class="form-check-label" for="${kriteriumId}">
+                                ${kriterium}
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            `;
+            kriterienListe.innerHTML += html;
+        });
+        
+        kriterienContainer.style.display = 'block';
+    } else {
+        document.getElementById('kriterienContainer').style.display = 'none';
+    }
+}
+
+function toggleKriterium(checkbox) {
+    const item = checkbox.closest('.checklist-item');
+    if (checkbox.checked) {
+        item.classList.add('checked');
+    } else {
+        item.classList.remove('checked');
+    }
+}
+
+function resetForm() {
+    document.getElementById('notenForm').reset();
+    setRating(0);
+    document.getElementById('kriterienContainer').style.display = 'none';
+    document.getElementById('kategorieBeschreibung').style.display = 'none';
+    
+    // Alle Kriterien zurücksetzen
+    const items = document.querySelectorAll('.checklist-item');
+    items.forEach(item => item.classList.remove('checked'));
+}
+
+// Formular-Validierung
+document.getElementById('notenForm').addEventListener('submit', function(e) {
+    const bewertung = document.getElementById('bewertung').value;
+    if (bewertung == 0) {
+        e.preventDefault();
+        alert('Bitte geben Sie eine Bewertung ab.');
+        return false;
+    }
+    
+    return true;
+});
+
+// Letzte Bewertungen laden
+function loadLetzteNoten() {
+    // Hier würde normalerweise eine AJAX-Anfrage stehen
+    const tbody = document.getElementById('letzteNoten');
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="6" class="text-center text-muted">
+                <i class="fas fa-spinner fa-spin"></i> Lade letzte Bewertungen...
+            </td>
+        </tr>
+    `;
+    
+    // Simuliere Laden nach 1 Sekunde
+    setTimeout(() => {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="6" class="text-center text-muted">
+                    Noch keine Bewertungen vorhanden.
+                </td>
+            </tr>
+        `;
+    }, 1000);
+}
+
+// Kategorie-Beschreibung beim Seitenladen
+document.addEventListener('DOMContentLoaded', function() {
+    loadLetzteNoten();
+    
+    // Heute-Datum setzen
+    const heute = new Date().toISOString().split('T')[0];
+    document.getElementById('datum').value = heute;
+});
+</script>
+{% endblock %}

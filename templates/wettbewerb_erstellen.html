@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}Wettbewerb erstellen{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-trophy"></i> Neuen Wettbewerb erstellen</h1>
+    <p class="text-muted">Erstellen Sie einen neuen Wettbewerb für die Schüler</p>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-medal"></i> Wettbewerb-Informationen</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">
+                            <i class="fas fa-tag"></i> Name des Wettbewerbs *
+                        </label>
+                        <input type="text" class="form-control" id="name" name="name" required
+                               placeholder="z.B. Quran-Rezitation Wettbewerb">
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="typ" class="form-label">
+                                    <i class="fas fa-category"></i> Typ *
+                                </label>
+                                <select class="form-select" id="typ" name="typ" required>
+                                    <option value="">Bitte wählen</option>
+                                    <option value="Koran">Koran-Rezitation</option>
+                                    <option value="Wissen">Religiöses Wissen</option>
+                                    <option value="Verhalten">Verhalten</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="datum" class="form-label">
+                                    <i class="fas fa-calendar"></i> Datum *
+                                </label>
+                                <input type="date" class="form-control" id="datum" name="datum" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="anmeldeschluss" class="form-label">
+                            <i class="fas fa-calendar-times"></i> Anmeldeschluss
+                        </label>
+                        <input type="date" class="form-control" id="anmeldeschluss" name="anmeldeschluss">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="beschreibung" class="form-label">
+                            <i class="fas fa-info-circle"></i> Beschreibung
+                        </label>
+                        <textarea class="form-control" id="beschreibung" name="beschreibung" rows="4"
+                                  placeholder="Detaillierte Beschreibung des Wettbewerbs..."></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="ist_aktiv" name="ist_aktiv" checked>
+                            <label class="form-check-label" for="ist_aktiv">
+                                <i class="fas fa-check-circle"></i> Wettbewerb ist aktiv
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-save"></i> Wettbewerb erstellen
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <a href="{{ url_for('dashboard_erweitert') }}" class="btn btn-secondary w-100">
+                                <i class="fas fa-times"></i> Abbrechen
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row justify-content-center mt-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-lightbulb"></i> Wettbewerb-Typen</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <i class="fas fa-book-quran fa-3x text-success mb-2"></i>
+                            <h6>Koran-Rezitation</h6>
+                            <p class="text-muted small">Bewertung der Quran-Rezitation und Tajwid</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <i class="fas fa-brain fa-3x text-info mb-2"></i>
+                            <h6>Religiöses Wissen</h6>
+                            <p class="text-muted small">Prüfung des religiösen Wissens</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-center">
+                            <i class="fas fa-heart fa-3x text-warning mb-2"></i>
+                            <h6>Verhalten</h6>
+                            <p class="text-muted small">Bewertung des Verhaltens und der Moral</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
