@@ -174,6 +174,7 @@ class Transaction(db.Model):
 # MODELS
 
 class User(db.Model):
+    __tablename__ = 'user'
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(64), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
@@ -183,6 +184,7 @@ class User(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.datetime.utcnow)
 
 class Klasse(db.Model):
+    __tablename__ = 'klasse'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(50), nullable=False)
     schuljahr = db.Column(db.String(9), nullable=False)
@@ -205,6 +207,7 @@ class Schueler(db.Model):
     wettbewerb_teilnahmen = db.relationship('WettbewerbTeilnahme', backref='schueler', lazy=True)
 
 class Unterrichtseinheit(db.Model):
+    __tablename__ = 'unterrichtseinheit'
     id = db.Column(db.Integer, primary_key=True)
     datum = db.Column(db.Date, nullable=False)
     stunden = db.Column(db.String(10), nullable=False)
@@ -308,6 +311,7 @@ class WettbewerbTeilnahme(db.Model):
 
 # Rollenmanagement (Erweiterung des bestehenden User-Modells)
 class LehrerKlassenZuordnung(db.Model):
+    __tablename__ = 'lehrer_klassen_zuordnung'
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     klasse_id = db.Column(db.Integer, db.ForeignKey('klasse.id'), nullable=False)
@@ -1837,9 +1841,9 @@ def admin_finanzen_export_all():
 
 
 
-@app.route("/")
-def index():
-    """Hauptseite - Weiterleitung zum Klassenbuch"""
+@app.route("/klassenbuch_redirect")
+def klassenbuch_redirect():
+    """Weiterleitung zum Klassenbuch"""
     return redirect(url_for('klassenbuch'))
 
 @app.route("/klassenbuch")
@@ -2858,10 +2862,8 @@ def schueler_export(klasse_id):
                      as_attachment=True,
                      download_name=f'schueler_{klasse.name}_{klasse.schuljahr}.xlsx')
 
-# Datenbank initialisieren
-@app.before_first_request
-def create_tables():
-    db.create_all()
+# Datenbank-Tabellen werden bereits in init_database() erstellt
+# @app.before_first_request ist in neueren Flask-Versionen nicht mehr verfügbar
 
 # Erstelle Standard-Bewertungskategorien
 @app.route('/setup_default_categories')
@@ -2923,6 +2925,5 @@ def setup_default_categories():
     return redirect(url_for('noten_kategorien'))
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()
+    print("🚀 Starte Moschee-Klassenbuch-System...")
     app.run(debug=True, host='0.0.0.0', port=3000)
